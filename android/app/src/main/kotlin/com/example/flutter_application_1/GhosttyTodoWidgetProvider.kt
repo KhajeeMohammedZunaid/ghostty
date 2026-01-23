@@ -6,32 +6,14 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.content.ComponentName
-import android.net.Uri
 import android.widget.RemoteViews
 import android.view.View
 import android.graphics.Paint
 import android.os.Build
-import es.antonborri.home_widget.HomeWidgetBackgroundReceiver
 
 class GhosttyTodoWidgetProvider : AppWidgetProvider() {
 
     companion object {
-        private const val HOME_WIDGET_BACKGROUND_ACTION = "es.antonborri.home_widget.action.BACKGROUND"
-        
-        // Helper function to create background intent with unique request code
-        private fun createBackgroundIntent(context: Context, uri: Uri, requestCode: Int): PendingIntent {
-            val intent = Intent(context, HomeWidgetBackgroundReceiver::class.java)
-            intent.data = uri
-            intent.action = HOME_WIDGET_BACKGROUND_ACTION
-
-            var flags = PendingIntent.FLAG_UPDATE_CURRENT
-            if (Build.VERSION.SDK_INT >= 23) {
-                flags = flags or PendingIntent.FLAG_IMMUTABLE
-            }
-
-            return PendingIntent.getBroadcast(context, requestCode, intent, flags)
-        }
-        
         // Array of todo row IDs
         private val todoRowIds = intArrayOf(
             R.id.todo_row_1,
@@ -117,13 +99,7 @@ class GhosttyTodoWidgetProvider : AppWidgetProvider() {
                             views.setInt(todoItemIds[i], "setPaintFlags", Paint.ANTI_ALIAS_FLAG)
                             views.setImageViewResource(todoCheckIds[i], R.drawable.widget_checkbox_unchecked)
                         }
-                        
-                        // Create toggle intent for checkbox - this runs in background without opening app
-                        // Use unique request code (based on position + hash) to ensure each checkbox gets its own PendingIntent
-                        val toggleUri = Uri.parse("homewidget://toggle_todo?id=${ids[i]}")
-                        val requestCode = ids[i].hashCode() and 0xFFFF // Use lower 16 bits for unique code
-                        val toggleIntent = createBackgroundIntent(context, toggleUri, requestCode)
-                        views.setOnClickPendingIntent(todoCheckIds[i], toggleIntent)
+                        // Checkbox is display-only - no click handler (managed from app)
                     }
                 }
             }

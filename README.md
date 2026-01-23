@@ -1,16 +1,15 @@
-# flutter_application_1
+# Ghostty
 
-A new Flutter project.
+A private journal that stays private. Built with Flutter.
 
-## Getting Started
+Your thoughts deserve protection. Ghostty encrypts everything with AES-256 and stores it only on your device. No accounts, no cloud sync, no tracking.
 
-This project is a starting point for a Flutter application.
+**Features**
+- AES - 256 Encrypted 
+- Encrypted journal entries with rich text and media
+- Todo list with home screen widget
+- Biometric authentication
+- Screenshot and screen recording prevention
+- Completely offline
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+**Made by ThreadDev**

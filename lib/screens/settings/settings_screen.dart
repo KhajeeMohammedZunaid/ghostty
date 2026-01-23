@@ -542,6 +542,7 @@ class AboutScreen extends StatelessWidget {
             _buildFeatureRow(context, 'AES-256 encryption'),
             _buildFeatureRow(context, 'Biometric authentication'),
             _buildFeatureRow(context, 'Offline-only storage'),
+            _buildFeatureRow(context, 'Screenshot & screen recording prevention'),
             _buildFeatureRow(context, 'No analytics or tracking'),
 
             const SizedBox(height: 24),
@@ -606,7 +607,7 @@ class AboutScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   // Privacy message - plain text at bottom
                   Text(
-                    '✨ Made for your privacy',
+                    'Made for your privacy',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
                     ),
@@ -688,20 +689,31 @@ class UpcomingUpdatesScreen extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  Text(
-                    '🚀',
-                    style: theme.textTheme.displaySmall,
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'logos/playstore.png',
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'What\'s Next',
+                    'Ghostty',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Features we\'re working on',
+                    'v1.0.0',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
                     ),
@@ -739,7 +751,7 @@ class UpcomingUpdatesScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Additional security layers including app lock timeout customization and secure screenshot prevention.',
+              'Additional security layers including app lock timeout customization and auto-lock settings.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 height: 1.5,
                 color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
@@ -758,42 +770,6 @@ class UpcomingUpdatesScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Set reminders for your todos so you never miss an important task. Smart notifications that respect your privacy.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                height: 1.5,
-                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // File Attachments
-            Text(
-              'File Attachments',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Attach documents and files to your journal entries. All attachments will be encrypted locally.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                height: 1.5,
-                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Tags & Categories
-            Text(
-              'Tags & Categories',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Organize your entries with custom tags and categories for easier searching and filtering.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 height: 1.5,
                 color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
@@ -843,7 +819,7 @@ class UpcomingUpdatesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    '✨ Made for your privacy',
+                    'Made for your privacy',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
                     ),
