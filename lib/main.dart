@@ -14,26 +14,16 @@ import 'services/todo_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Hive for Flutter
   await Hive.initFlutter();
-
-  // Initialize storage service
   await StorageService.instance.initialize();
-  
-  // Initialize todo storage service
   await TodoStorageService().initialize();
-  
-  // Initialize home widget service
   await HomeWidgetService().initialize();
 
-  // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Enable secure mode - prevents screenshots and shows blank in recents
   if (Platform.isAndroid) {
     await _enableSecureMode();
   }
@@ -41,20 +31,16 @@ void main() async {
   runApp(const GhosttyApp());
 }
 
-/// Enable secure mode to prevent screenshots and blank screen in recent apps
 Future<void> _enableSecureMode() async {
   const platform = MethodChannel('ghostty/secure');
   try {
     await platform.invokeMethod('enableSecureMode');
-  } catch (e) {
-    debugPrint('Could not enable secure mode: $e');
-  }
+  } catch (_) {}
 }
 
 class GhosttyApp extends StatefulWidget {
   const GhosttyApp({super.key});
 
-  // Global navigator key for navigation from anywhere
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
@@ -62,8 +48,7 @@ class GhosttyApp extends StatefulWidget {
   State<GhosttyApp> createState() => _GhosttyAppState();
 }
 
-class _GhosttyAppState extends State<GhosttyApp>
-    with WidgetsBindingObserver {
+class _GhosttyAppState extends State<GhosttyApp> with WidgetsBindingObserver {
   bool _requiresAuth = false;
   DateTime? _pausedTime;
   static const _navigationChannel = MethodChannel('ghostty/navigation');
@@ -92,7 +77,6 @@ class _GhosttyAppState extends State<GhosttyApp>
   void _navigateToTodoEditor() {
     final navigator = GhosttyApp.navigatorKey.currentState;
     if (navigator != null) {
-      // Navigate to todo editor - push it over whatever screen is currently shown
       navigator.push(
         MaterialPageRoute(builder: (context) => const TodoEditorScreen()),
       );
@@ -108,11 +92,9 @@ class _GhosttyAppState extends State<GhosttyApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // App is going to background - always require auth on return
       _pausedTime = DateTime.now();
     } else if (state == AppLifecycleState.resumed) {
-      // App is coming to foreground - require auth only if paused for more than 2 seconds
-      // This prevents auth from showing when permission dialogs are dismissed
+      // Require auth if paused > 2s (avoids auth on permission dialogs)
       if (_pausedTime != null) {
         final pausedDuration = DateTime.now().difference(_pausedTime!);
         if (pausedDuration.inSeconds > 2) {

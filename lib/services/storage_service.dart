@@ -4,8 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/journal_entry.dart';
 import 'encryption_service.dart';
 
-/// Secure storage service for Ghost Journal
-/// All data is encrypted before storage
+/// Secure storage service - all data encrypted before storage
 class StorageService {
   static StorageService? _instance;
   late Box<String> _journalBox;
@@ -21,7 +20,6 @@ class StorageService {
 
   bool get isInitialized => _initialized;
 
-  /// Initialize storage
   Future<void> initialize() async {
     if (_initialized) return;
 
@@ -30,8 +28,6 @@ class StorageService {
     _prefs = await SharedPreferences.getInstance();
     _initialized = true;
   }
-
-  // ==================== PIN Management ====================
 
   Future<bool> hasPin() async {
     return _prefs.containsKey('ghost_pin_hash');
@@ -48,8 +44,6 @@ class StorageService {
     return EncryptionService.verifyPin(pin, storedHash);
   }
 
-  // ==================== Journal Entries ====================
-
   Future<List<JournalEntry>> getAllJournalEntries() async {
     final encryption = EncryptionService.instance;
     if (!encryption.isInitialized) return [];
@@ -62,13 +56,11 @@ class StorageService {
           final decrypted = encryption.decrypt(encrypted);
           entries.add(JournalEntry.fromEncodedJson(decrypted));
         }
-      } catch (e) {
-        // Skip corrupted entries
+      } catch (_) {
         continue;
       }
     }
 
-    // Sort by updated date, newest first
     entries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return entries;
   }
@@ -102,8 +94,6 @@ class StorageService {
     await _journalBox.delete(id);
   }
 
-  // ==================== Settings ====================
-
   Future<bool> isDarkMode() async {
     return _prefs.getBool('ghost_dark_mode') ?? true;
   }
@@ -111,7 +101,7 @@ class StorageService {
   Future<void> setDarkMode(bool value) async {
     await _prefs.setBool('ghost_dark_mode', value);
   }
-  
+
   Future<ThemeMode> getThemeMode() async {
     final mode = _prefs.getString('ghost_theme_mode');
     switch (mode) {
@@ -124,7 +114,7 @@ class StorageService {
         return ThemeMode.system;
     }
   }
-  
+
   Future<void> saveThemeMode(ThemeMode mode) async {
     String modeStr;
     switch (mode) {
@@ -148,8 +138,6 @@ class StorageService {
   Future<void> setAutoLockSeconds(int seconds) async {
     await _prefs.setInt('ghost_auto_lock_seconds', seconds);
   }
-
-  // ==================== Clear All Data ====================
 
   Future<void> clearAllData() async {
     await _journalBox.clear();
