@@ -13,7 +13,7 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final TodoStorageService _todoStorage = TodoStorageService();
   List<TodoItem> _todos = [];
   bool _showCompleted = false;
@@ -22,7 +22,22 @@ class _TodoListScreenState extends State<TodoListScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadTodos();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Reload todos when app comes back to foreground (widget may have changed them)
+    if (state == AppLifecycleState.resumed) {
+      _loadTodos();
+    }
   }
 
   Future<void> _loadTodos() async {

@@ -266,6 +266,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Authentication method',
                 trailing: const Icon(Icons.check_circle_rounded, color: GhostTheme.success, size: 20),
               ),
+            if (_biometricAvailable || kIsWeb) _buildDivider(),
+            _buildListTile(
+              icon: Icons.logout_rounded,
+              title: 'Lock App',
+              subtitle: 'Require authentication on next open',
+              titleColor: GhostTheme.error,
+              onTap: _logout,
+            ),
           ]),
           
           const SizedBox(height: 24),
@@ -307,33 +315,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: _showUpcomingUpdatesScreen,
             ),
           ]),
-          
-          const SizedBox(height: 32),
-          
-          // Logout Button
-          Center(
-            child: TextButton.icon(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Lock App'),
-              style: TextButton.styleFrom(
-                foregroundColor: GhostTheme.error,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Footer
-          Center(
-            child: Text(
-              'Ghostty',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
           
           const SizedBox(height: 32),
         ],
@@ -668,7 +649,7 @@ class AboutScreen extends StatelessWidget {
   }
 }
 
-// Upcoming Updates Screen - Blog style
+// Upcoming Updates Screen - Clean minimal style like About
 class UpcomingUpdatesScreen extends StatelessWidget {
   const UpcomingUpdatesScreen({super.key});
 
@@ -694,7 +675,7 @@ class UpcomingUpdatesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Upcoming Updates'),
+        title: const Text('Upcoming'),
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -703,98 +684,125 @@ class UpcomingUpdatesScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // Header - Centered
             Center(
               child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: GhostTheme.primary.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.rocket_launch_rounded,
-                      size: 40,
-                      color: GhostTheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   Text(
-                    'What\'s Coming',
+                    '🚀',
+                    style: theme.textTheme.displaySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'What\'s Next',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 2),
                   Text(
                     'Features we\'re working on',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
 
             // Export Data
-            _buildUpdateCard(
-              context,
-              icon: Icons.download_rounded,
-              title: 'Export Data',
-              description: 'Export your journals and todos to keep a backup or transfer to another device. Your data, your control.',
-              status: 'Coming Soon',
+            Text(
+              'Export Data',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Export your journals and todos to keep a backup or transfer to another device. Your data, your control.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
             // Enhanced Security
-            _buildUpdateCard(
-              context,
-              icon: Icons.shield_rounded,
-              title: 'Enhanced Security',
-              description: 'Additional security layers including app lock timeout customization and secure screenshot prevention.',
-              status: 'In Development',
+            Text(
+              'Enhanced Security',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Additional security layers including app lock timeout customization and secure screenshot prevention.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Reminders
-            _buildUpdateCard(
-              context,
-              icon: Icons.notifications_active_rounded,
-              title: 'Todo Reminders',
-              description: 'Set reminders for your todos so you never miss an important task. Smart notifications that respect your privacy.',
-              status: 'Planned',
+            // Todo Reminders
+            Text(
+              'Todo Reminders',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Set reminders for your todos so you never miss an important task. Smart notifications that respect your privacy.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Attachments
-            _buildUpdateCard(
-              context,
-              icon: Icons.attach_file_rounded,
-              title: 'File Attachments',
-              description: 'Attach documents and files to your journal entries. All attachments will be encrypted locally.',
-              status: 'Planned',
+            // File Attachments
+            Text(
+              'File Attachments',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Attach documents and files to your journal entries. All attachments will be encrypted locally.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Tags
-            _buildUpdateCard(
-              context,
-              icon: Icons.label_rounded,
-              title: 'Tags & Categories',
-              description: 'Organize your entries with custom tags and categories for easier searching and filtering.',
-              status: 'Exploring',
+            // Tags & Categories
+            Text(
+              'Tags & Categories',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Organize your entries with custom tags and categories for easier searching and filtering.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
             ),
 
             const SizedBox(height: 32),
 
-            // Footer
+            // Developer - ThreadDev first
             Center(
               child: Column(
                 children: [
@@ -847,102 +855,6 @@ class UpcomingUpdatesScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildUpdateCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String description,
-    required String status,
-  }) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    Color statusColor;
-    switch (status) {
-      case 'Coming Soon':
-        statusColor = GhostTheme.primary;
-        break;
-      case 'In Development':
-        statusColor = Colors.orange;
-        break;
-      case 'Planned':
-        statusColor = Colors.blue;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: statusColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        status,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: statusColor,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            description,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
-              height: 1.5,
-            ),
-          ),
-        ],
       ),
     );
   }
