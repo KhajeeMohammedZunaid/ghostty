@@ -38,6 +38,10 @@ Everything is encrypted before it touches storage. Your thoughts never leave you
 | Data Stays on Device | Yes | No | Yes |
 | Encrypted Export | Yes | No | No |
 
+### Downloads
+
+**[Download from GitHub Releases](https://github.com/KhajeeMohammedZunaid/ghostty/releases)**
+
 **Ghostty** keeps your data encrypted on-device with bank-level security. No login required, no cloud storage, no compromises.
 
 **Google Keep** stores your notes on external servers. Anyone with account access can read them.
@@ -48,9 +52,7 @@ Everything is encrypted before it touches storage. Your thoughts never leave you
 
 This app works completely offline. A small amount of mobile data may be required only when downloading app updates.
 
-### Downloads
 
-**[Download from GitHub Releases](https://github.com/KhajeeMohammedZunaid/ghostty/releases)**
 
 | APK | Compatible Devices |
 |-----|---------------------|
