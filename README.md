@@ -50,6 +50,8 @@ This app works completely offline. A small amount of mobile data may be required
 
 ### Downloads
 
+**[Download from GitHub Releases](https://github.com/KhajeeMohammedZunaid/ghostty/releases)**
+
 | APK | Compatible Devices |
 |-----|---------------------|
 | arm64-v8a | Most modern phones (2016+), Samsung, Pixel, OnePlus, etc. |

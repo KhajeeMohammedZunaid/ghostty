@@ -47,15 +47,14 @@ import UIKit
   }
   
   override func applicationWillResignActive(_ application: UIApplication) {
-    // TEMPORARILY DISABLED FOR VIDEO DEMO
     // Add blur effect when app goes to background
-    // if let window = self.window {
-    //   let blurEffect = UIBlurEffect(style: .light)
-    //   let blurView = UIVisualEffectView(effect: blurEffect)
-    //   blurView.frame = window.bounds
-    //   blurView.tag = 999
-    //   window.addSubview(blurView)
-    // }
+    if let window = self.window {
+      let blurEffect = UIBlurEffect(style: .light)
+      let blurView = UIVisualEffectView(effect: blurEffect)
+      blurView.frame = window.bounds
+      blurView.tag = 999
+      window.addSubview(blurView)
+    }
   }
   
   override func applicationDidBecomeActive(_ application: UIApplication) {

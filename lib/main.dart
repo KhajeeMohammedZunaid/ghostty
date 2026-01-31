@@ -24,19 +24,10 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // TEMPORARILY DISABLED FOR VIDEO DEMO
-  // if (Platform.isAndroid || Platform.isIOS) {
-  //   await _enableSecureMode();
-  // }
+  // Note: Secure mode is enabled natively in MainActivity.onCreate (Android)
+  // and via method channel after app starts (iOS)
 
   runApp(const GhosttyApp());
-}
-
-Future<void> _enableSecureMode() async {
-  const platform = MethodChannel('ghostty/secure');
-  try {
-    await platform.invokeMethod('enableSecureMode');
-  } catch (_) {}
 }
 
 class GhosttyApp extends StatefulWidget {
@@ -53,12 +44,23 @@ class _GhosttyAppState extends State<GhosttyApp> with WidgetsBindingObserver {
   bool _requiresAuth = false;
   DateTime? _pausedTime;
   static const _navigationChannel = MethodChannel('ghostty/navigation');
+  static const _secureChannel = MethodChannel('ghostty/secure');
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setupNavigationChannel();
+    _enableSecureMode();
+  }
+
+  Future<void> _enableSecureMode() async {
+    // Only call for iOS - Android handles it in MainActivity.onCreate
+    if (Platform.isIOS) {
+      try {
+        await _secureChannel.invokeMethod('enableSecureMode');
+      } catch (_) {}
+    }
   }
 
   void _setupNavigationChannel() {

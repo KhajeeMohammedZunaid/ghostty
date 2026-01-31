@@ -70,7 +70,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // TEMPORARILY DISABLED FOR VIDEO DEMO - enableSecureMode()
+        enableSecureMode()
         handleIntent(intent)
     }
     
