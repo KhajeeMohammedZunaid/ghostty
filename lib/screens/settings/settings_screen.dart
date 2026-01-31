@@ -66,6 +66,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showWhyGhosttyScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WhyGhosttyScreen()),
+    );
+  }
+
   Future<void> _clearAllData() async {
     // Step 1: First warning
     final confirm1 = await GhostModal.show(
@@ -195,6 +202,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // About Section
+          _buildSectionHeader('About'),
+          _buildSettingsCard([
+            _buildListTile(
+              icon: Icons.info_rounded,
+              title: 'Ghostty',
+              subtitle: 'Version 1.0.0',
+              onTap: _showAboutScreen,
+            ),
+            _buildDivider(),
+            _buildListTile(
+              icon: Icons.compare_rounded,
+              title: 'Why Ghostty',
+              subtitle: 'See how we compare to others',
+              onTap: _showWhyGhosttyScreen,
+            ),
+            _buildDivider(),
+            _buildListTile(
+              icon: Icons.upcoming_rounded,
+              title: 'Upcoming Updates',
+              subtitle: 'What\'s next for Ghostty',
+              onTap: _showUpcomingUpdatesScreen,
+            ),
+          ]),
+          
+          const SizedBox(height: 24),
+          
           // Appearance Section
           _buildSectionHeader('Appearance'),
           _buildSettingsCard([
@@ -294,25 +328,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'Delete all entries and media',
               titleColor: GhostTheme.error,
               onTap: _clearAllData,
-            ),
-          ]),
-          
-          const SizedBox(height: 24),
-          
-          // About Section
-          _buildSectionHeader('About'),
-          _buildSettingsCard([
-            _buildListTile(
-              icon: Icons.info_rounded,
-              title: 'Ghostty',
-              subtitle: 'Version 1.0.0',
-              onTap: _showAboutScreen,
-            ),
-            _buildListTile(
-              icon: Icons.upcoming_rounded,
-              title: 'Upcoming Updates',
-              subtitle: 'What\'s next for Ghostty',
-              onTap: _showUpcomingUpdatesScreen,
             ),
           ]),
           
@@ -831,6 +846,386 @@ class UpcomingUpdatesScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Why Ghostty Screen - Comparison with other apps
+class WhyGhosttyScreen extends StatelessWidget {
+  const WhyGhosttyScreen({super.key});
+
+  Future<void> _openThreadDev(BuildContext context) async {
+    final uri = Uri.parse('https://threaddev.in');
+    try {
+      await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open link: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Why Ghostty'),
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header - Centered
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'logos/playstore.png',
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Why Ghostty?',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your privacy matters',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Introduction
+            Text(
+              'Not all note apps are created equal. Here\'s how Ghostty compares to the alternatives.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            // Comparison Table Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: GhostTheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'Feature',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'Ghostty',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: GhostTheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'Others',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Comparison Rows
+            _buildComparisonRow(
+              context,
+              'AES-256 Encryption',
+              true,
+              false,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'Works Offline',
+              true,
+              false,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'No Account Required',
+              true,
+              false,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'No Cloud Storage',
+              true,
+              false,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'Screenshot Protection',
+              true,
+              false,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'Biometric Lock',
+              true,
+              true,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'Data Stays on Device',
+              true,
+              false,
+              isDark,
+            ),
+            _buildComparisonRow(
+              context,
+              'Encrypted Export',
+              true,
+              false,
+              isDark,
+            ),
+
+            const SizedBox(height: 32),
+
+            // Ghostty Section
+            Text(
+              'Ghostty',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: GhostTheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Bank-level AES-256 encryption keeps your notes secure. No login required, no cloud storage, no tracking. Your data stays on your device and can only be accessed by you. Transfer notes between devices with encrypted exports that require your personal key to decrypt.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Google Keep Section
+            Text(
+              'Google Keep',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Cloud-based storage means your notes are stored on external servers. Anyone with access to your Google account can read your notes. Data may be used for advertising purposes and is subject to third-party access.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Default Notes Section
+            Text(
+              'Default Phone Notes',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Basic note-taking without dedicated security features. No encryption, no biometric protection, no screenshot prevention. Your private thoughts are vulnerable to anyone who gains access to your device.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Bottom line
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.black.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: GhostTheme.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                'Ghostty is designed with one goal: keeping your private thoughts truly private. No compromises.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // Developer - ThreadDev
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    'Made by',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _openThreadDev(context),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'ThreadDev',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: GhostTheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.arrow_outward_rounded,
+                              size: 14,
+                              color: GhostTheme.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Made for your privacy',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComparisonRow(
+    BuildContext context,
+    String feature,
+    bool ghostty,
+    bool others,
+    bool isDark,
+  ) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isDark 
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.black.withValues(alpha: 0.05),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              feature,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Icon(
+                ghostty ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: ghostty ? GhostTheme.success : GhostTheme.error.withValues(alpha: 0.5),
+                size: 22,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Icon(
+                others ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: others ? GhostTheme.success : GhostTheme.error.withValues(alpha: 0.5),
+                size: 22,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

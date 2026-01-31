@@ -30,7 +30,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   
   # State Management
   provider: ^6.1.2
@@ -73,6 +72,9 @@ dependencies:
   
   # Home Screen Widget
   home_widget: ^0.7.0
+  
+  # Rich Text Editor
+  flutter_quill: ^11.5.0
 
 dev_dependencies:
   flutter_test:

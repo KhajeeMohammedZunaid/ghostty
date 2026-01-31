@@ -24,9 +24,10 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  if (Platform.isAndroid) {
-    await _enableSecureMode();
-  }
+  // TEMPORARILY DISABLED FOR VIDEO DEMO
+  // if (Platform.isAndroid || Platform.isIOS) {
+  //   await _enableSecureMode();
+  // }
 
   runApp(const GhosttyApp());
 }

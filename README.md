@@ -19,10 +19,30 @@ Ghostty is an offline-first journal and todo app built for privacy. All your dat
 - Biometric authentication
 - Screenshot and screen recording prevention
 - Dark and light themes
+- Encrypted data export for device transfer
 
 ### Security
 
 Everything is encrypted before it touches storage. Your thoughts never leave your device.
+
+### Why Ghostty?
+
+| Feature | Ghostty | Google Keep | Default Notes |
+|---------|---------|-------------|---------------|
+| AES-256 Encryption | Yes | No | No |
+| Works Offline | Yes | Limited | Yes |
+| No Account Required | Yes | No | Varies |
+| No Cloud Storage | Yes | No | Varies |
+| Screenshot Protection | Yes | No | No |
+| Biometric Lock | Yes | Limited | Limited |
+| Data Stays on Device | Yes | No | Yes |
+| Encrypted Export | Yes | No | No |
+
+**Ghostty** keeps your data encrypted on-device with bank-level security. No login required, no cloud storage, no compromises.
+
+**Google Keep** stores your notes on external servers. Anyone with account access can read them.
+
+**Default Phone Notes** offer basic functionality without dedicated security features.
 
 ### Note
 
@@ -38,5 +58,6 @@ This app works completely offline. A small amount of mobile data may be required
 ---
 
 <p align="center">
-  Made by <a href="https://threaddev.in"><b>ThreadDev</b></a>
+  Made by <a href="https://threaddev.in"><b>ThreadDev</b></a><br>
+  <sub>Made for your privacy</sub>
 </p>

@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final PageController _pageController;
   bool _shouldAnimate = true;
   bool _isFabExpanded = false;
+  final _journalListKey = GlobalKey<JournalListScreenState>();
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onTabSelected(int index) {
+    final wasOnSettings = _currentIndex == 1;
     setState(() {
       _currentIndex = index;
       _isFabExpanded = false;
@@ -45,6 +47,10 @@ class _HomeScreenState extends State<HomeScreen> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
     );
+    // Refresh journal list when switching back from settings
+    if (index == 0 && wasOnSettings) {
+      _journalListKey.currentState?.refreshEntries();
+    }
   }
 
   void _toggleFab() {
@@ -67,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ).then((_) {
       // Refresh the journal list if we're on that screen
       if (_currentIndex == 0) {
-        setState(() {});
+        _journalListKey.currentState?.refreshEntries();
       }
     });
   }
@@ -92,16 +98,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Scaffold(
       body: Stack(
         children: [
           PageView(
             controller: _pageController,
             physics: const NeverScrollableScrollPhysics(),
-            children: const [
-              JournalListScreen(showFab: false),
-              SettingsScreen(),
+            children: [
+              JournalListScreen(key: _journalListKey, showFab: false),
+              const SettingsScreen(),
             ],
           ),
           // Overlay when FAB is expanded
@@ -109,15 +115,15 @@ class _HomeScreenState extends State<HomeScreen> {
             Positioned.fill(
               child: GestureDetector(
                 onTap: () => setState(() => _isFabExpanded = false),
-                child: Container(
-                  color: Colors.black.withOpacity(0.5),
-                ),
+                child: Container(color: Colors.black.withOpacity(0.5)),
               ),
             ),
         ],
       ),
       // Only show FAB on Journal tab (index 0), not on Settings
-      floatingActionButton: _currentIndex == 0 ? _buildExpandableFab(isDark) : null,
+      floatingActionButton: _currentIndex == 0
+          ? _buildExpandableFab(isDark)
+          : null,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: isDark ? GhostTheme.darkSurface : GhostTheme.lightSurface,
@@ -162,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isSelected = _currentIndex == index;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     final item = GestureDetector(
       onTap: () => _onTabSelected(index),
       behavior: HitTestBehavior.opaque,
@@ -170,8 +176,10 @@ class _HomeScreenState extends State<HomeScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05))
+          color: isSelected
+              ? (isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.05))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
@@ -180,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(
               isSelected ? selectedIcon : icon,
-              color: isSelected 
+              color: isSelected
                   ? (isDark ? Colors.white : Colors.black)
                   : theme.textTheme.bodySmall?.color,
               size: 24,
@@ -199,12 +207,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-    
+
     if (!_shouldAnimate) return item;
-    
-    return item.animate(
-      target: isSelected ? 1 : 0,
-    ).scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1));
+
+    return item
+        .animate(target: isSelected ? 1 : 0)
+        .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1));
   }
 
   Widget _buildExpandableFab(bool isDark) {

@@ -18,10 +18,10 @@ class JournalListScreen extends StatefulWidget {
   const JournalListScreen({super.key, this.showFab = true});
 
   @override
-  State<JournalListScreen> createState() => _JournalListScreenState();
+  JournalListScreenState createState() => JournalListScreenState();
 }
 
-class _JournalListScreenState extends State<JournalListScreen> {
+class JournalListScreenState extends State<JournalListScreen> {
   List<JournalEntry> _entries = [];
   bool _isLoading = true;
   String _searchQuery = '';
@@ -34,7 +34,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
   void initState() {
     super.initState();
     _shouldAnimate = AnimationPrefs.shouldAnimateJournalList();
-    _loadEntries();
+    _loadEntries(showLoading: true);
     _checkForUpdates();
   }
 
@@ -52,17 +52,24 @@ class _JournalListScreenState extends State<JournalListScreen> {
     super.dispose();
   }
 
-  Future<void> _loadEntries() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadEntries({bool showLoading = false}) async {
+    if (showLoading) setState(() => _isLoading = true);
     try {
       final entries = await StorageService.instance.getAllJournalEntries();
-      setState(() {
-        _entries = entries;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _entries = entries;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Public method to refresh entries - called by parent screens
+  void refreshEntries() {
+    _loadEntries();
   }
 
   List<JournalEntry> get _filteredEntries {
@@ -99,8 +106,9 @@ class _JournalListScreenState extends State<JournalListScreen> {
     );
 
     if (confirm == true) {
+      // Optimistic UI update - remove immediately
+      setState(() => _entries.removeWhere((e) => e.id == entry.id));
       await StorageService.instance.deleteJournalEntry(entry.id);
-      _loadEntries();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -124,9 +132,12 @@ class _JournalListScreenState extends State<JournalListScreen> {
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
-        transitionDuration: const Duration(milliseconds: 200),
+        transitionDuration: const Duration(milliseconds: 150),
       ),
-    ).then((_) => _loadEntries());
+    ).then((_) {
+      // Refresh in background without blocking UI
+      _loadEntries();
+    });
   }
 
   @override
@@ -304,19 +315,19 @@ class _JournalListScreenState extends State<JournalListScreen> {
 
     // Handle background color - adapt text colors based on background
     final hasBackgroundColor = entry.backgroundColor != null;
-    final bgColor = hasBackgroundColor 
+    final bgColor = hasBackgroundColor
         ? Color(entry.backgroundColor!)
         : (isDark ? GhostTheme.darkCard : GhostTheme.lightCard);
-    
+
     // Determine if background is dark for text color adaptation
-    final isBackgroundDark = hasBackgroundColor 
+    final isBackgroundDark = hasBackgroundColor
         ? bgColor.computeLuminance() < 0.5
         : isDark;
-    
+
     // Adapt text colors based on background
     final textColor = isBackgroundDark ? Colors.white : Colors.black87;
     final hintColor = isBackgroundDark ? Colors.white60 : Colors.black45;
-    final attachmentColor = isBackgroundDark 
+    final attachmentColor = isBackgroundDark
         ? Colors.white70
         : const Color(0xFF555555);
 
@@ -330,10 +341,16 @@ class _JournalListScreenState extends State<JournalListScreen> {
         builder: (context, snapshot) {
           // If there's a background image, use lighter text
           final hasBackgroundImage = snapshot.hasData && snapshot.data != null;
-          final effectiveTextColor = hasBackgroundImage ? Colors.white : textColor;
-          final effectiveHintColor = hasBackgroundImage ? Colors.white70 : hintColor;
-          final effectiveAttachmentColor = hasBackgroundImage ? Colors.white70 : attachmentColor;
-          
+          final effectiveTextColor = hasBackgroundImage
+              ? Colors.white
+              : textColor;
+          final effectiveHintColor = hasBackgroundImage
+              ? Colors.white70
+              : hintColor;
+          final effectiveAttachmentColor = hasBackgroundImage
+              ? Colors.white70
+              : attachmentColor;
+
           return Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -365,16 +382,15 @@ class _JournalListScreenState extends State<JournalListScreen> {
                       Icon(
                         Icons.push_pin_rounded,
                         size: 14,
-                        color: isBackgroundDark ? Colors.white70 : GhostTheme.primary.withOpacity(0.8),
+                        color: isBackgroundDark
+                            ? Colors.white70
+                            : GhostTheme.primary.withOpacity(0.8),
                       ),
                     ],
                     const Spacer(),
                     Text(
                       _formatDateShort(entry.updatedAt),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: effectiveHintColor,
-                      ),
+                      style: TextStyle(fontSize: 11, color: effectiveHintColor),
                     ),
                   ],
                 ),
@@ -395,17 +411,12 @@ class _JournalListScreenState extends State<JournalListScreen> {
                   const SizedBox(height: 6),
                 ],
 
-                // Content preview
+                // Content preview with formatting
                 if (entry.plainTextContent.isNotEmpty)
-                  Text(
-                    entry.plainTextContent,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: effectiveHintColor,
-                      height: 1.4,
-                    ),
-                    maxLines: maxLines,
-                    overflow: TextOverflow.ellipsis,
+                  _buildFormattedContentPreview(
+                    entry,
+                    effectiveHintColor,
+                    maxLines,
                   ),
 
                 // Attachments indicator
@@ -463,15 +474,19 @@ class _JournalListScreenState extends State<JournalListScreen> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: isBackgroundDark 
+                              color: isBackgroundDark
                                   ? Colors.white.withValues(alpha: 0.15)
-                                  : const Color(0xFF2D2D2D).withValues(alpha: 0.1),
+                                  : const Color(
+                                      0xFF2D2D2D,
+                                    ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               '#$tag',
                               style: TextStyle(
-                                color: isBackgroundDark ? Colors.white70 : const Color(0xFF2D2D2D),
+                                color: isBackgroundDark
+                                    ? Colors.white70
+                                    : const Color(0xFF2D2D2D),
                                 fontSize: 10,
                               ),
                             ),
@@ -501,6 +516,50 @@ class _JournalListScreenState extends State<JournalListScreen> {
           delay: Duration(milliseconds: index * 40),
           duration: const Duration(milliseconds: 250),
         );
+  }
+
+  /// Build formatted content preview with bold/italic styling preserved
+  Widget _buildFormattedContentPreview(
+    JournalEntry entry,
+    Color textColor,
+    int maxLines,
+  ) {
+    final spans = entry.formattedContentSpans;
+    if (spans.isEmpty) return const SizedBox.shrink();
+
+    // Build TextSpan list with proper formatting
+    final textSpans = <TextSpan>[];
+    int totalChars = 0;
+    const maxChars = 200; // Limit characters for performance
+
+    for (final span in spans) {
+      if (totalChars >= maxChars) break;
+
+      String text = span.text;
+      if (totalChars + text.length > maxChars) {
+        text = text.substring(0, maxChars - totalChars);
+      }
+      totalChars += text.length;
+
+      textSpans.add(
+        TextSpan(
+          text: text,
+          style: TextStyle(
+            fontSize: 12,
+            color: textColor,
+            height: 1.4,
+            fontWeight: span.isBold ? FontWeight.w600 : FontWeight.normal,
+            fontStyle: span.isItalic ? FontStyle.italic : FontStyle.normal,
+          ),
+        ),
+      );
+    }
+
+    return RichText(
+      text: TextSpan(children: textSpans),
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 
   Future<Uint8List?> _loadBackgroundImage(String id) async {
@@ -588,6 +647,17 @@ class _JournalListScreenState extends State<JournalListScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Handle background color
+    final hasBackgroundColor = entry.backgroundColor != null;
+    final bgColor = hasBackgroundColor
+        ? Color(entry.backgroundColor!)
+        : (isDark ? GhostTheme.darkCard : GhostTheme.lightCard);
+
+    // Determine if background is dark for text color adaptation
+    final isBackgroundDark = hasBackgroundColor
+        ? bgColor.computeLuminance() < 0.5
+        : isDark;
+
     final card = Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Dismissible(
@@ -607,21 +677,32 @@ class _JournalListScreenState extends State<JournalListScreen> {
           child: const Icon(Icons.delete_rounded, color: GhostTheme.error),
         ),
         child: FutureBuilder<Uint8List?>(
-          future: entry.hasBackground
+          future: entry.backgroundImageId != null
               ? _loadBackgroundImage(entry.backgroundImageId!)
               : Future.value(null),
           builder: (context, snapshot) {
+            final hasBackgroundImage =
+                snapshot.hasData && snapshot.data != null;
+            final effectiveTextColor = hasBackgroundImage
+                ? Colors.white
+                : (isBackgroundDark ? Colors.white : Colors.black87);
+            final effectiveHintColor = hasBackgroundImage
+                ? Colors.white70
+                : (isBackgroundDark ? Colors.white70 : Colors.black54);
+
             return GestureDetector(
               onTap: () => _openEditor(entry),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark ? GhostTheme.darkCard : GhostTheme.lightCard,
+                  color: bgColor,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isDark ? GhostTheme.darkBorder : GhostTheme.lightBorder,
+                    color: isDark
+                        ? GhostTheme.darkBorder
+                        : GhostTheme.lightBorder,
                   ),
-                  image: snapshot.hasData && snapshot.data != null
+                  image: hasBackgroundImage
                       ? DecorationImage(
                           image: MemoryImage(snapshot.data!),
                           fit: BoxFit.cover,
@@ -635,14 +716,19 @@ class _JournalListScreenState extends State<JournalListScreen> {
                     Row(
                       children: [
                         if (entry.mood != null) ...[
-                          Text(entry.mood!, style: const TextStyle(fontSize: 20)),
+                          Text(
+                            entry.mood!,
+                            style: const TextStyle(fontSize: 20),
+                          ),
                           const SizedBox(width: 8),
                         ],
                         if (entry.isPinned) ...[
                           Icon(
                             Icons.push_pin_rounded,
                             size: 16,
-                            color: GhostTheme.primary.withOpacity(0.8),
+                            color: hasBackgroundImage || isBackgroundDark
+                                ? Colors.white70
+                                : GhostTheme.primary.withValues(alpha: 0.8),
                           ),
                           const SizedBox(width: 8),
                         ],
@@ -651,6 +737,7 @@ class _JournalListScreenState extends State<JournalListScreen> {
                             entry.title.isNotEmpty ? entry.title : 'Untitled',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
+                              color: effectiveTextColor,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -661,7 +748,9 @@ class _JournalListScreenState extends State<JournalListScreen> {
                     const SizedBox(height: 8),
                     Text(
                       entry.plainTextContent,
-                      style: theme.textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: effectiveHintColor,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -671,12 +760,18 @@ class _JournalListScreenState extends State<JournalListScreen> {
                         Icon(
                           Icons.schedule_rounded,
                           size: 14,
-                          color: theme.textTheme.bodySmall?.color,
+                          color: hasBackgroundImage || isBackgroundDark
+                              ? Colors.white54
+                              : Colors.black38,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           _formatDate(entry.updatedAt),
-                          style: theme.textTheme.labelSmall,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: hasBackgroundImage || isBackgroundDark
+                                ? Colors.white54
+                                : Colors.black38,
+                          ),
                         ),
                         if (entry.tags.isNotEmpty) ...[
                           const SizedBox(width: 16),
@@ -684,31 +779,30 @@ class _JournalListScreenState extends State<JournalListScreen> {
                             child: Wrap(
                               spacing: 6,
                               runSpacing: 4,
-                              children: entry.tags
-                                  .take(3)
-                                  .map(
-                                    (tag) {
-                                      return Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isDark 
-                                              ? GhostTheme.primary.withValues(alpha: 0.15)
-                                              : const Color(0xFF2D2D2D).withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          '#$tag',
-                                          style: theme.textTheme.labelSmall?.copyWith(
-                                            color: isDark ? GhostTheme.primary : const Color(0xFF2D2D2D),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  )
-                                  .toList(),
+                              children: entry.tags.take(3).map((tag) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        hasBackgroundImage || isBackgroundDark
+                                        ? Colors.white.withValues(alpha: 0.15)
+                                        : Colors.black.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '#$tag',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color:
+                                          hasBackgroundImage || isBackgroundDark
+                                          ? Colors.white70
+                                          : Colors.black54,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ),
                         ],

@@ -192,7 +192,51 @@ class JournalEntry {
   bool get hasAttachments => attachments.isNotEmpty;
 
   /// Check if note has a custom background
-  bool get hasBackground => backgroundImageId != null || backgroundColor != null;
+  bool get hasBackground =>
+      backgroundImageId != null || backgroundColor != null;
+
+  /// Get content formatted spans for thumbnail display
+  /// Returns a list of (text, isBold, isItalic) tuples
+  List<ContentSpan> get formattedContentSpans {
+    if (content.isEmpty) return [];
+
+    try {
+      final jsonContent = jsonDecode(content);
+      if (jsonContent is List) {
+        final spans = <ContentSpan>[];
+        for (final op in jsonContent) {
+          if (op is Map && op.containsKey('insert')) {
+            final insert = op['insert'];
+            if (insert is String && insert.isNotEmpty) {
+              final attrs = op['attributes'] as Map<String, dynamic>?;
+              final isBold = attrs?['bold'] == true;
+              final isItalic = attrs?['italic'] == true;
+              spans.add(
+                ContentSpan(text: insert, isBold: isBold, isItalic: isItalic),
+              );
+            }
+          }
+        }
+        return spans;
+      }
+    } catch (e) {
+      // Plain text fallback
+    }
+    return [ContentSpan(text: content.trim(), isBold: false, isItalic: false)];
+  }
+}
+
+/// Represents a span of content with formatting
+class ContentSpan {
+  final String text;
+  final bool isBold;
+  final bool isItalic;
+
+  ContentSpan({
+    required this.text,
+    required this.isBold,
+    required this.isItalic,
+  });
 }
 
 /// Text formatting types

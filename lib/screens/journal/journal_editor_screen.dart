@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -26,8 +27,8 @@ class JournalEditorScreen extends StatefulWidget {
 class _JournalEditorScreenState extends State<JournalEditorScreen>
     with SingleTickerProviderStateMixin {
   late final TextEditingController _titleController;
-  late final TextEditingController _contentController;
   late final TextEditingController _tagController;
+  late QuillController _quillController;
   late List<String> _tags;
   late List<NoteAttachment> _attachments;
   String? _selectedMood;
@@ -36,18 +37,11 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   bool _isSaving = false;
   bool _hasChanges = false;
   final FocusNode _titleFocusNode = FocusNode();
-  final FocusNode _contentFocusNode = FocusNode();
+  final FocusNode _editorFocusNode = FocusNode();
+  final FocusNode _tagFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
 
-  // Formatting state
-  bool _isBold = false;
-  bool _isItalic = false;
   bool _isPinned = false;
-
-  // Undo/Redo stacks
-  final List<String> _undoStack = [];
-  final List<String> _redoStack = [];
-  String _lastContent = '';
 
   // Cached background image to prevent blinking
   Uint8List? _cachedBackgroundImage;
@@ -97,25 +91,54 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     _backgroundColor = widget.entry?.backgroundColor;
     _isPinned = widget.entry?.isPinned ?? false;
 
-    String initialContent = '';
-    if (widget.entry?.content != null && widget.entry!.content.isNotEmpty) {
-      initialContent = _parseContent(widget.entry!.content);
-    }
-    _contentController = TextEditingController(text: initialContent);
-    _lastContent = initialContent;
+    // Initialize Quill controller
+    _initQuillController();
 
     _titleController.addListener(_onTextChanged);
-    _contentController.addListener(_onContentChanged);
 
     // Haptic feedback while typing (throttled)
     _titleController.addListener(_onTypingHaptic);
-    _contentController.addListener(_onTypingHaptic);
 
     // Load background image once
     _loadAndCacheBackground();
 
     // Preload attachment images
     _preloadAttachmentImages();
+  }
+
+  void _initQuillController() {
+    Document doc;
+    if (widget.entry?.content != null && widget.entry!.content.isNotEmpty) {
+      try {
+        // Try to parse as Delta JSON
+        final jsonContent = jsonDecode(widget.entry!.content);
+        if (jsonContent is List) {
+          doc = Document.fromJson(jsonContent);
+        } else {
+          // Plain text
+          doc = Document()..insert(0, widget.entry!.content);
+        }
+      } catch (e) {
+        // Plain text fallback
+        doc = Document()..insert(0, widget.entry!.content);
+      }
+    } else {
+      doc = Document();
+    }
+
+    _quillController = QuillController(
+      document: doc,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+
+    _quillController.addListener(_onQuillChanged);
+  }
+
+  void _onQuillChanged() {
+    if (!_hasChanges) {
+      setState(() => _hasChanges = true);
+    }
+    _onTypingHaptic();
   }
 
   void _onTypingHaptic() {
@@ -128,7 +151,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
 
   Future<void> _preloadAttachmentImages() async {
     for (final attachment in _attachments) {
-      if (attachment.isImage && !_cachedAttachmentImages.containsKey(attachment.id)) {
+      if (attachment.isImage &&
+          !_cachedAttachmentImages.containsKey(attachment.id)) {
         final imageData = await _loadAttachmentImage(attachment.id);
         if (imageData != null && mounted) {
           _cachedAttachmentImages[attachment.id] = imageData;
@@ -136,53 +160,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
       }
     }
     if (mounted) setState(() {});
-  }
-
-  void _onContentChanged() {
-    _onTextChanged();
-    // Add to undo stack
-    final currentContent = _contentController.text;
-    if (currentContent != _lastContent &&
-        currentContent.length != _lastContent.length) {
-      if (_undoStack.isEmpty || _undoStack.last != _lastContent) {
-        _undoStack.add(_lastContent);
-        if (_undoStack.length > 50) _undoStack.removeAt(0);
-      }
-      _redoStack.clear();
-      _lastContent = currentContent;
-    }
-  }
-
-  void _undo() {
-    if (_undoStack.isNotEmpty) {
-      _redoStack.add(_contentController.text);
-      final previous = _undoStack.removeLast();
-      _contentController.removeListener(_onContentChanged);
-      _contentController.text = previous;
-      _contentController.selection = TextSelection.collapsed(
-        offset: previous.length,
-      );
-      _lastContent = previous;
-      _contentController.addListener(_onContentChanged);
-      HapticFeedback.lightImpact();
-      setState(() {});
-    }
-  }
-
-  void _redo() {
-    if (_redoStack.isNotEmpty) {
-      _undoStack.add(_contentController.text);
-      final next = _redoStack.removeLast();
-      _contentController.removeListener(_onContentChanged);
-      _contentController.text = next;
-      _contentController.selection = TextSelection.collapsed(
-        offset: next.length,
-      );
-      _lastContent = next;
-      _contentController.addListener(_onContentChanged);
-      HapticFeedback.lightImpact();
-      setState(() {});
-    }
   }
 
   void _togglePin() {
@@ -205,71 +182,43 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   }
 
   /// Determines if the effective background is dark
-  /// Takes into account custom background color with luminance check
   bool _isEffectivelyDark(bool systemIsDark) {
     if (_backgroundColor != null) {
-      // Use luminance of the custom background color
       final color = Color(_backgroundColor!);
       return color.computeLuminance() < 0.5;
     }
-    // Fall back to system theme
     return systemIsDark;
   }
 
-  /// Get the appropriate text color based on effective background
   Color _getTextColor(bool systemIsDark) {
     final effectivelyDark = _isEffectivelyDark(systemIsDark);
     return effectivelyDark ? Colors.white : Colors.black87;
   }
 
-  /// Get the appropriate hint/secondary text color
   Color _getHintColor(bool systemIsDark) {
     final effectivelyDark = _isEffectivelyDark(systemIsDark);
     return effectivelyDark ? Colors.white60 : Colors.black45;
   }
 
-  /// Get the appropriate icon color
   Color _getIconColor(bool systemIsDark) {
     final effectivelyDark = _isEffectivelyDark(systemIsDark);
     return effectivelyDark ? Colors.white70 : Colors.black54;
   }
 
-  /// Get the disabled icon color
   Color _getDisabledIconColor(bool systemIsDark) {
     final effectivelyDark = _isEffectivelyDark(systemIsDark);
     return effectivelyDark ? Colors.white24 : Colors.black26;
-  }
-
-  String _parseContent(String content) {
-    if (content.isEmpty) return '';
-    try {
-      final jsonContent = jsonDecode(content);
-      if (jsonContent is List) {
-        final buffer = StringBuffer();
-        for (final op in jsonContent) {
-          if (op is Map && op.containsKey('insert')) {
-            final insert = op['insert'];
-            if (insert is String) {
-              buffer.write(insert);
-            }
-          }
-        }
-        return buffer.toString().trim();
-      }
-    } catch (e) {
-      // Plain text
-    }
-    return content.trim();
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
     _titleController.dispose();
-    _contentController.dispose();
+    _quillController.dispose();
     _tagController.dispose();
     _titleFocusNode.dispose();
-    _contentFocusNode.dispose();
+    _editorFocusNode.dispose();
+    _tagFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -278,7 +227,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
-    setState(() {});
   }
 
   // ==================== Tag Management ====================
@@ -292,6 +240,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
         _hasChanges = true;
       });
       HapticFeedback.lightImpact();
+      // Keep focus on tag field for continuous input
+      _tagFocusNode.requestFocus();
     }
   }
 
@@ -390,76 +340,64 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   // ==================== Formatting ====================
 
   void _toggleBold() {
-    setState(() {
-      _isBold = !_isBold;
-      _hasChanges = true;
-    });
+    final isBold = _quillController.getSelectionStyle().attributes.containsKey(
+      'bold',
+    );
+    _quillController.formatSelection(
+      isBold ? Attribute.clone(Attribute.bold, null) : Attribute.bold,
+    );
     HapticFeedback.selectionClick();
+    setState(() {});
   }
 
   void _toggleItalic() {
-    setState(() {
-      _isItalic = !_isItalic;
-      _hasChanges = true;
-    });
+    final isItalic = _quillController
+        .getSelectionStyle()
+        .attributes
+        .containsKey('italic');
+    _quillController.formatSelection(
+      isItalic ? Attribute.clone(Attribute.italic, null) : Attribute.italic,
+    );
     HapticFeedback.selectionClick();
+    setState(() {});
   }
 
   void _insertBullet() {
-    final text = _contentController.text;
-    final selection = _contentController.selection;
-    final cursorPos = selection.baseOffset;
-
-    // Find the start of the current line
-    int lineStart = cursorPos;
-    while (lineStart > 0 && text[lineStart - 1] != '\n') {
-      lineStart--;
-    }
-
-    // Insert bullet at line start
-    final newText =
-        text.substring(0, lineStart) + '• ' + text.substring(lineStart);
-    _contentController.text = newText;
-    _contentController.selection = TextSelection.collapsed(
-      offset: cursorPos + 2,
+    final isActive =
+        _quillController.getSelectionStyle().attributes.containsKey('list') &&
+        _quillController.getSelectionStyle().attributes['list']?.value ==
+            'bullet';
+    _quillController.formatSelection(
+      isActive ? Attribute.clone(Attribute.ul, null) : Attribute.ul,
     );
-    _hasChanges = true;
     HapticFeedback.selectionClick();
+    setState(() {});
   }
 
   void _insertNumberedList() {
-    final text = _contentController.text;
-    final selection = _contentController.selection;
-    final cursorPos = selection.baseOffset;
-
-    // Count existing numbered items
-    int number = 1;
-    final lines = text.substring(0, cursorPos).split('\n');
-    for (final line in lines.reversed) {
-      final match = RegExp(r'^(\d+)\. ').firstMatch(line);
-      if (match != null) {
-        number = int.parse(match.group(1)!) + 1;
-        break;
-      }
-    }
-
-    // Find the start of the current line
-    int lineStart = cursorPos;
-    while (lineStart > 0 && text[lineStart - 1] != '\n') {
-      lineStart--;
-    }
-
-    // Insert number at line start
-    final prefix = '$number. ';
-    final newText =
-        text.substring(0, lineStart) + prefix + text.substring(lineStart);
-    _contentController.text = newText;
-    _contentController.selection = TextSelection.collapsed(
-      offset: cursorPos + prefix.length,
+    final isActive =
+        _quillController.getSelectionStyle().attributes.containsKey('list') &&
+        _quillController.getSelectionStyle().attributes['list']?.value ==
+            'ordered';
+    _quillController.formatSelection(
+      isActive ? Attribute.clone(Attribute.ol, null) : Attribute.ol,
     );
-    _hasChanges = true;
     HapticFeedback.selectionClick();
+    setState(() {});
   }
+
+  bool get _isBoldActive =>
+      _quillController.getSelectionStyle().attributes.containsKey('bold');
+  bool get _isItalicActive =>
+      _quillController.getSelectionStyle().attributes.containsKey('italic');
+  bool get _isBulletActive =>
+      _quillController.getSelectionStyle().attributes.containsKey('list') &&
+      _quillController.getSelectionStyle().attributes['list']?.value ==
+          'bullet';
+  bool get _isNumberedActive =>
+      _quillController.getSelectionStyle().attributes.containsKey('list') &&
+      _quillController.getSelectionStyle().attributes['list']?.value ==
+          'ordered';
 
   // ==================== Image Handling ====================
 
@@ -477,8 +415,24 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
 
       final bytes = await image.readAsBytes();
       await _saveImageAttachment(bytes, image.name);
+    } on PlatformException catch (e) {
+      // Handle permission denied or other platform errors silently
+      debugPrint('Camera error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not access camera'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     } catch (e) {
-      _showError('Failed to capture image: $e');
+      // Silently handle other errors
+      debugPrint('Camera pick error: $e');
     }
   }
 
@@ -496,8 +450,24 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
 
       final bytes = await image.readAsBytes();
       await _saveImageAttachment(bytes, image.name);
+    } on PlatformException catch (e) {
+      // Handle permission denied or other platform errors silently
+      debugPrint('Gallery picker error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not access gallery'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     } catch (e) {
-      _showError('Failed to pick image: $e');
+      // Silently handle other errors
+      debugPrint('Image pick error: $e');
     }
   }
 
@@ -509,10 +479,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     final id = uuid.v4();
     final encryption = EncryptionService.instance;
 
-    // Compress image for storage
     final compressedBytes = _compressImage(bytes);
 
-    // Encrypt and save
     final encrypted = encryption.encryptBytes(compressedBytes);
     final dir = await getApplicationDocumentsDirectory();
     final attachmentDir = Directory('${dir.path}/note_attachments');
@@ -533,7 +501,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
 
     setState(() {
       _attachments.add(attachment);
-      _cachedAttachmentImages[id] = compressedBytes; // Cache immediately
+      _cachedAttachmentImages[id] = compressedBytes;
       _hasChanges = true;
     });
 
@@ -545,7 +513,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
       final decoded = img.decodeImage(bytes);
       if (decoded == null) return bytes;
 
-      // Resize if too large
       img.Image resized = decoded;
       if (decoded.width > 1200 || decoded.height > 1200) {
         if (decoded.width > decoded.height) {
@@ -555,7 +522,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
         }
       }
 
-      // Encode as JPEG with 75% quality
       return Uint8List.fromList(img.encodeJpg(resized, quality: 75));
     } catch (e) {
       return bytes;
@@ -564,20 +530,19 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
 
   // ==================== Background Image ====================
 
-  // Preset colors for background (limited selection)
   static const List<Color> _backgroundColors = [
-    Color(0xFFFFCDD2), // Red light
-    Color(0xFFF8BBD9), // Pink light
-    Color(0xFFE1BEE7), // Purple light
-    Color(0xFFBBDEFB), // Blue light
-    Color(0xFFB2EBF2), // Cyan light
-    Color(0xFFC8E6C9), // Green light
-    Color(0xFFFFF9C4), // Yellow light
-    Color(0xFFFFE0B2), // Orange light
-    Color(0xFFD7CCC8), // Brown light
-    Color(0xFFCFD8DC), // Blue Grey light
-    Color(0xFF37474F), // Dark grey
-    Color(0xFF263238), // Dark slate
+    Color(0xFFFFCDD2),
+    Color(0xFFF8BBD9),
+    Color(0xFFE1BEE7),
+    Color(0xFFBBDEFB),
+    Color(0xFFB2EBF2),
+    Color(0xFFC8E6C9),
+    Color(0xFFFFF9C4),
+    Color(0xFFFFE0B2),
+    Color(0xFFD7CCC8),
+    Color(0xFFCFD8DC),
+    Color(0xFF37474F),
+    Color(0xFF263238),
   ];
 
   Future<void> _pickBackgroundImage() async {
@@ -614,7 +579,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
               ),
             ),
             const SizedBox(height: 24),
-            // Color palette
             Text(
               'Colors',
               style: TextStyle(
@@ -806,10 +770,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     final id = uuid.v4();
     final encryption = EncryptionService.instance;
 
-    // Compress for background
     final compressedBytes = _compressImage(bytes);
 
-    // Encrypt and save
     final encrypted = encryption.encryptBytes(compressedBytes);
     final dir = await getApplicationDocumentsDirectory();
     final bgDir = Directory('${dir.path}/note_backgrounds');
@@ -820,7 +782,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     final file = File('${bgDir.path}/$id.ghost');
     await file.writeAsBytes(encrypted);
 
-    // Delete old background if exists
     if (_backgroundImageId != null) {
       final oldFile = File('${bgDir.path}/$_backgroundImageId.ghost');
       if (await oldFile.exists()) {
@@ -878,7 +839,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     );
 
     if (confirm == true) {
-      // Delete file
       try {
         final dir = await getApplicationDocumentsDirectory();
         final file = File(
@@ -903,9 +863,10 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   // ==================== Save ====================
 
   Future<void> _save() async {
-    final content = _contentController.text.trim();
+    final deltaJson = jsonEncode(_quillController.document.toDelta().toJson());
+    final plainText = _quillController.document.toPlainText().trim();
 
-    if (_titleController.text.trim().isEmpty && content.isEmpty) {
+    if (_titleController.text.trim().isEmpty && plainText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Add a title or some content'),
@@ -928,7 +889,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
       final entry = JournalEntry(
         id: widget.entry?.id ?? EncryptionService.generateSecureId(),
         title: _titleController.text.trim(),
-        content: content,
+        content: deltaJson,
         createdAt: widget.entry?.createdAt ?? now,
         updatedAt: now,
         mood: _selectedMood,
@@ -990,6 +951,20 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     );
   }
 
+  Future<Uint8List?> _loadAttachmentImage(String id) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/note_attachments/$id.ghost');
+
+      if (!await file.exists()) return null;
+
+      final encrypted = await file.readAsBytes();
+      return EncryptionService.instance.decryptBytes(encrypted);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ==================== Build Methods ====================
 
   @override
@@ -997,6 +972,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final isKeyboardVisible = keyboardHeight > 0;
 
     return PopScope(
       canPop: !_hasChanges,
@@ -1006,73 +983,112 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
           if (shouldPop && mounted) Navigator.of(context).pop();
         }
       },
-      child: Scaffold(
-        backgroundColor: _backgroundColor != null 
-            ? Color(_backgroundColor!)
-            : (isDark ? const Color(0xFF0A0A0A) : const Color(0xFFFAFAFA)),
-        resizeToAvoidBottomInset: false,
-        body: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Stack(
-            children: [
-              // Background image (cached to prevent blinking)
-              if (_cachedBackgroundImage != null)
-                Positioned.fill(
-                  child: RepaintBoundary(
-                    child: Opacity(
-                      opacity: isDark ? 0.3 : 0.4,
-                      child: Image.memory(
-                        _cachedBackgroundImage!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        cacheWidth: 800,
-                        filterQuality: FilterQuality.low,
-                        isAntiAlias: false,
-                      ),
-                    ),
-                  ),
-                ),
-
-              // Content
-              SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    _buildTopBar(isDark),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        physics: const ClampingScrollPhysics(),
-                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 8),
-                              _buildMoodButton(isDark),
-                              const SizedBox(height: 16),
-                              _buildTitleField(isDark),
-                              const SizedBox(height: 12),
-                              _buildContentField(isDark),
-                              const SizedBox(height: 20),
-                              if (_attachments.isNotEmpty) ...[
-                                _buildAttachmentsSection(isDark),
-                                const SizedBox(height: 24),
-                              ],
-                              _buildTagsSection(isDark),
-                              SizedBox(height: bottomPadding + 140),
-                            ],
-                          ),
+      child: GestureDetector(
+        // Tap anywhere to focus editor, keeping keyboard open
+        onTap: () {
+          _editorFocusNode.requestFocus();
+        },
+        child: Scaffold(
+          backgroundColor: _backgroundColor != null
+              ? Color(_backgroundColor!)
+              : (isDark ? const Color(0xFF0A0A0A) : const Color(0xFFFAFAFA)),
+          resizeToAvoidBottomInset: false,
+          body: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Stack(
+              children: [
+                // Background image
+                if (_cachedBackgroundImage != null)
+                  Positioned.fill(
+                    child: RepaintBoundary(
+                      child: Opacity(
+                        opacity: isDark ? 0.3 : 0.4,
+                        child: Image.memory(
+                          _cachedBackgroundImage!,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          cacheWidth: 800,
+                          filterQuality: FilterQuality.low,
+                          isAntiAlias: false,
                         ),
                       ),
                     ),
-                    _buildFormattingToolbar(isDark),
-                    _buildBottomBar(isDark, bottomPadding),
-                  ],
+                  ),
+
+                // Content
+                SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      _buildTopBar(isDark),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          physics: const ClampingScrollPhysics(),
+                          // Don't dismiss keyboard on scroll
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.manual,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 8),
+                                _buildMoodButton(isDark),
+                                const SizedBox(height: 16),
+                                _buildTitleField(isDark),
+                                const SizedBox(height: 12),
+                                _buildQuillEditor(isDark),
+                                const SizedBox(height: 20),
+                                if (_attachments.isNotEmpty) ...[
+                                  _buildAttachmentsSection(isDark),
+                                  const SizedBox(height: 24),
+                                ],
+                                _buildTagsSection(isDark),
+                                // Extra space for toolbar + keyboard
+                                SizedBox(
+                                  height: isKeyboardVisible
+                                      ? keyboardHeight + 80
+                                      : bottomPadding + 140,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+
+                // Floating formatting toolbar - sticks above keyboard with smooth animation
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  left: 0,
+                  right: 0,
+                  bottom: isKeyboardVisible ? keyboardHeight : bottomPadding,
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildFormattingToolbar(isDark),
+                        AnimatedCrossFade(
+                          duration: const Duration(milliseconds: 200),
+                          sizeCurve: Curves.easeOutCubic,
+                          crossFadeState: isKeyboardVisible
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
+                          firstChild: _buildBottomBar(isDark, bottomPadding),
+                          secondChild: const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1081,9 +1097,8 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
 
   Widget _buildTopBar(bool isDark) {
     final iconColor = _getIconColor(isDark);
-    final disabledColor = _getDisabledIconColor(isDark);
     final hintColor = _getHintColor(isDark);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       child: Row(
@@ -1103,28 +1118,6 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
               }
             },
             visualDensity: VisualDensity.compact,
-          ),
-          // Undo
-          IconButton(
-            icon: Icon(
-              Icons.undo_rounded,
-              color: _undoStack.isNotEmpty ? iconColor : disabledColor,
-              size: 20,
-            ),
-            onPressed: _undoStack.isNotEmpty ? _undo : null,
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Undo',
-          ),
-          // Redo
-          IconButton(
-            icon: Icon(
-              Icons.redo_rounded,
-              color: _redoStack.isNotEmpty ? iconColor : disabledColor,
-              size: 20,
-            ),
-            onPressed: _redoStack.isNotEmpty ? _redo : null,
-            visualDensity: VisualDensity.compact,
-            tooltip: 'Redo',
           ),
           const Spacer(),
           // Pin
@@ -1227,7 +1220,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   Widget _buildTitleField(bool isDark) {
     final textColor = _getTextColor(isDark);
     final hintColor = _getHintColor(isDark).withOpacity(0.5);
-    
+
     return TextField(
       controller: _titleController,
       focusNode: _titleFocusNode,
@@ -1248,7 +1241,10 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
         filled: false,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         isDense: true,
       ),
       maxLines: null,
@@ -1258,39 +1254,46 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     );
   }
 
-  Widget _buildContentField(bool isDark) {
+  Widget _buildQuillEditor(bool isDark) {
     final textColor = _getTextColor(isDark);
     final hintColor = _getHintColor(isDark);
-    
-    return TextField(
-      controller: _contentController,
-      focusNode: _contentFocusNode,
-      style: TextStyle(
-        fontSize: 16,
-        color: textColor.withOpacity(0.9),
-        height: 1.6,
-        fontWeight: _isBold ? FontWeight.bold : FontWeight.normal,
-        fontStyle: _isItalic ? FontStyle.italic : FontStyle.normal,
-      ),
-      decoration: InputDecoration(
-        hintText: 'Start writing...',
-        hintStyle: TextStyle(
-          fontSize: 16,
-          color: hintColor.withOpacity(0.5),
+
+    return QuillEditor.basic(
+      controller: _quillController,
+      focusNode: _editorFocusNode,
+      config: QuillEditorConfig(
+        placeholder: 'Start writing...',
+        padding: const EdgeInsets.all(16),
+        autoFocus: false,
+        expands: false,
+        scrollable: false,
+        customStyles: DefaultStyles(
+          paragraph: DefaultTextBlockStyle(
+            TextStyle(
+              fontSize: 16,
+              color: textColor.withOpacity(0.9),
+              height: 1.6,
+            ),
+            HorizontalSpacing.zero,
+            const VerticalSpacing(0, 8),
+            const VerticalSpacing(0, 0),
+            null,
+          ),
+          placeHolder: DefaultTextBlockStyle(
+            TextStyle(
+              fontSize: 16,
+              color: hintColor.withOpacity(0.5),
+              height: 1.6,
+            ),
+            HorizontalSpacing.zero,
+            const VerticalSpacing(0, 0),
+            const VerticalSpacing(0, 0),
+            null,
+          ),
+          bold: const TextStyle(fontWeight: FontWeight.bold),
+          italic: const TextStyle(fontStyle: FontStyle.italic),
         ),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        filled: false,
-        contentPadding: const EdgeInsets.all(16),
-        isDense: true,
       ),
-      maxLines: null,
-      minLines: 6,
-      keyboardType: TextInputType.multiline,
-      textCapitalization: TextCapitalization.sentences,
-      cursorColor: GhostTheme.primary,
-      cursorWidth: 2,
     );
   }
 
@@ -1309,16 +1312,16 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
           decoration: BoxDecoration(
             color: hasBackground
                 ? (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.white.withValues(alpha: 0.5))
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.white.withOpacity(0.5))
                 : (isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.white.withValues(alpha: 0.85)),
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.white.withOpacity(0.85)),
             border: Border(
               top: BorderSide(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : Colors.black.withValues(alpha: 0.06),
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.black.withOpacity(0.06),
               ),
             ),
           ),
@@ -1330,7 +1333,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
                 // Bold
                 _buildFormatButton(
                   icon: Icons.format_bold_rounded,
-                  isActive: _isBold,
+                  isActive: _isBoldActive,
                   onTap: _toggleBold,
                   isDark: isDark,
                   tooltip: 'Bold',
@@ -1338,7 +1341,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
                 // Italic
                 _buildFormatButton(
                   icon: Icons.format_italic_rounded,
-                  isActive: _isItalic,
+                  isActive: _isItalicActive,
                   onTap: _toggleItalic,
                   isDark: isDark,
                   tooltip: 'Italic',
@@ -1352,7 +1355,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
                 // Bullet list
                 _buildFormatButton(
                   icon: Icons.format_list_bulleted_rounded,
-                  isActive: false,
+                  isActive: _isBulletActive,
                   onTap: _insertBullet,
                   isDark: isDark,
                   tooltip: 'Bullet list',
@@ -1360,7 +1363,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
                 // Numbered list
                 _buildFormatButton(
                   icon: Icons.format_list_numbered_rounded,
-                  isActive: false,
+                  isActive: _isNumberedActive,
                   onTap: _insertNumberedList,
                   isDark: isDark,
                   tooltip: 'Numbered list',
@@ -1437,42 +1440,39 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.attach_file_rounded,
-                    size: 16,
-                    color: isDark ? Colors.white54 : Colors.black54,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.attach_file_rounded,
+                  size: 18,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Attachments',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : Colors.black54,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Attachments',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white54 : Colors.black54,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _attachments
-                    .where((a) => a.isImage)
-                    .map(
-                      (attachment) => _buildImageAttachment(attachment, isDark),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _attachments
+                  .where((a) => a.isImage)
+                  .map((a) => _buildImageAttachment(a, isDark))
+                  .toList(),
+            ),
+          ],
         ),
+      ),
     );
   }
 
@@ -1483,27 +1483,14 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
       child: GestureDetector(
         onLongPress: () => _deleteAttachment(attachment),
         onTap: () {
-          // Show full image in dialog
           if (cachedImage != null) {
             showDialog(
               context: context,
               builder: (context) => Dialog(
                 backgroundColor: Colors.transparent,
-                child: Stack(
-                  children: [
-                    InteractiveViewer(child: Image.memory(cachedImage)),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                  ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.memory(cachedImage, fit: BoxFit.contain),
                 ),
               ),
             );
@@ -1532,23 +1519,9 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
     );
   }
 
-  Future<Uint8List?> _loadAttachmentImage(String id) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/note_attachments/$id.ghost');
-
-      if (!await file.exists()) return null;
-
-      final encrypted = await file.readAsBytes();
-      return EncryptionService.instance.decryptBytes(encrypted);
-    } catch (e) {
-      return null;
-    }
-  }
-
   Widget _buildTagsSection(bool isDark) {
     final hintColor = _getHintColor(isDark);
-    
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1556,19 +1529,14 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
         children: [
           Row(
             children: [
-              Icon(
-                Icons.tag_rounded,
-                size: 16,
-                color: hintColor,
-              ),
-              const SizedBox(width: 6),
+              Icon(Icons.tag_rounded, size: 18, color: hintColor),
+              const SizedBox(width: 8),
               Text(
                 'Tags',
                 style: TextStyle(
-                  fontSize: 13,
-                  color: hintColor,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+                  color: hintColor,
                 ),
               ),
             ],
@@ -1579,7 +1547,7 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
             runSpacing: 8,
             children: [
               ..._tags.map((tag) => _buildTagChip(tag, isDark)),
-              if (_tags.length < 10) _buildAddTagButton(isDark),
+              _buildAddTagButton(isDark),
             ],
           ),
         ],
@@ -1588,16 +1556,16 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   }
 
   Widget _buildTagChip(String tag, bool isDark) {
-    // Use background-aware color for tag
     final effectivelyDark = _isEffectivelyDark(isDark);
-    final tagColor = effectivelyDark ? GhostTheme.primary : const Color(0xFF2D2D2D);
-    
+
     return GestureDetector(
       onTap: () => _removeTag(tag),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: tagColor.withOpacity(effectivelyDark ? 0.12 : 0.1),
+          color: effectivelyDark
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.black.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -1607,15 +1575,15 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
               '#$tag',
               style: TextStyle(
                 fontSize: 13,
-                color: tagColor,
-                fontWeight: FontWeight.w600,
+                color: effectivelyDark ? Colors.white70 : Colors.black54,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Icon(
               Icons.close_rounded,
               size: 14,
-              color: tagColor.withOpacity(0.7),
+              color: effectivelyDark ? Colors.white38 : Colors.black38,
             ),
           ],
         ),
@@ -1624,103 +1592,65 @@ class _JournalEditorScreenState extends State<JournalEditorScreen>
   }
 
   Widget _buildAddTagButton(bool isDark) {
+    final effectivelyDark = _isEffectivelyDark(isDark);
     final textColor = _getTextColor(isDark);
     final hintColor = _getHintColor(isDark);
-    
+
     return SizedBox(
       width: 120,
       height: 36,
       child: TextField(
         controller: _tagController,
-        style: TextStyle(
-          fontSize: 13,
-          color: textColor.withOpacity(0.7),
-        ),
+        focusNode: _tagFocusNode,
+        style: TextStyle(fontSize: 13, color: textColor),
         decoration: InputDecoration(
-          hintText: 'Add tag',
+          hintText: '+ Add tag',
           hintStyle: TextStyle(
             fontSize: 13,
-            color: hintColor.withOpacity(0.6),
+            color: hintColor.withValues(alpha: 0.6),
           ),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
-          filled: false,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 10,
+            horizontal: 12,
+            vertical: 8,
           ),
           isDense: true,
+          filled: false,
         ),
         onSubmitted: (_) => _addTag(),
         textInputAction: TextInputAction.done,
+        cursorColor: effectivelyDark ? Colors.white70 : Colors.black54,
       ),
     );
   }
 
   Widget _buildBottomBar(bool isDark, double bottomPadding) {
-    final wordCount = _countWords(_contentController.text);
-    final charCount = _contentController.text.length;
+    final wordCount = _countWords(_quillController.document.toPlainText());
+    final charCount = _quillController.document.toPlainText().length;
 
     return Container(
       padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding + 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFFAFAFA),
         border: Border(
-          top: BorderSide(
-            color: isDark
-                ? Colors.white.withOpacity(0.06)
-                : Colors.black.withOpacity(0.06),
-          ),
+          top: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
         ),
       ),
       child: Row(
         children: [
           Text(
-            '$wordCount words',
+            '$wordCount words · $charCount chars',
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.white38 : Colors.black38,
             ),
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            width: 3,
-            height: 3,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white24 : Colors.black26,
-              shape: BoxShape.circle,
-            ),
-          ),
-          Text(
-            '$charCount chars',
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.white38 : Colors.black38,
-            ),
-          ),
-          if (_attachments.isNotEmpty) ...[
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              width: 3,
-              height: 3,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.black26,
-                shape: BoxShape.circle,
-              ),
-            ),
-            Text(
-              '${_attachments.length} files',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white38 : Colors.black38,
-              ),
-            ),
-          ],
           const Spacer(),
           if (widget.entry != null)
             Text(
-              _formatDate(widget.entry!.updatedAt),
+              'Edited ${_formatDate(widget.entry!.updatedAt)}',
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.white38 : Colors.black38,

@@ -1,4 +1,4 @@
-package com.example.flutter_application_1
+package com.ghostty.app
 
 import android.content.ContentUris
 import android.content.ContentValues
@@ -60,10 +60,8 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         
-        // Navigation channel for widget actions
         navigationMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NAVIGATION_CHANNEL)
         
-        // If there was a pending navigation action, send it now
         pendingNavigation?.let { action ->
             navigationMethodChannel?.invokeMethod("navigate", action)
             pendingNavigation = null
@@ -72,7 +70,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableSecureMode()
+        // TEMPORARILY DISABLED FOR VIDEO DEMO - enableSecureMode()
         handleIntent(intent)
     }
     
@@ -83,7 +81,6 @@ class MainActivity : FlutterFragmentActivity() {
     
     private fun handleIntent(intent: Intent?) {
         if (intent?.action == "OPEN_TODO_EDITOR") {
-            // Try to send navigation immediately, or store it for later
             if (navigationMethodChannel != null) {
                 navigationMethodChannel?.invokeMethod("navigate", "open_todo_editor")
             } else {
@@ -103,7 +100,6 @@ class MainActivity : FlutterFragmentActivity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
     
-    /// Scan a file so it appears in Gallery immediately
     private fun scanFileToMediaStore(path: String, result: io.flutter.plugin.common.MethodChannel.Result) {
         MediaScannerConnection.scanFile(
             this,
@@ -116,7 +112,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
     
-    /// Notify MediaStore that a file was deleted
     private fun notifyMediaDeleted(path: String) {
         try {
             var uri = queryMediaUri(path, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
@@ -129,9 +124,7 @@ class MainActivity : FlutterFragmentActivity() {
             if (uri != null) {
                 contentResolver.delete(uri, null, null)
             }
-        } catch (e: Exception) {
-            // Silent fail
-        }
+        } catch (e: Exception) {}
     }
     
     private fun queryMediaUri(path: String, collection: Uri): Uri? {
